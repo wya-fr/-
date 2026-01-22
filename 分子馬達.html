@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分子馬達：物理修正 3D 平面型動畫</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #030712; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; }
+        canvas { display: block; }
+        
+        .ui-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: grid;
+            grid-template-areas: 
+                "top-left . top-right"
+                ". . ."
+                "bottom-left . bottom-right";
+            grid-template-columns: 350px 1fr 280px;
+            grid-template-rows: auto 1fr auto;
+            padding: 24px;
+            color: white;
+            z-index: 10;
+        }
+
+        .ui-overlay > * { pointer-events: auto; }
+
+        .step-info {
+            grid-area: top-left;
+            background: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 20px;
+            border-left: 4px solid #3b82f6;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .energy-display {
+            grid-area: top-right;
+            background: rgba(17, 24, 39, 0.5);
+            backdrop-filter: blur(8px);
+            padding: 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+
+        .speed-panel {
+            grid-area: bottom-left;
+            align-self: end;
+            background: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 16px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-panel {
+            grid-area: bottom-right;
+            align-self: end;
+            background: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 16px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .active-step-label { color: #60a5fa; font-weight: 800; text-shadow: 0 0 8px rgba(96, 165, 250, 0.4); }
+        input[type=range] { accent-color: #3b82f6; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="flash-effect" class="flash"></div>
+
+    <div class="ui-overlay">
+        <div class="step-info">
+            <span class="text-[9px] uppercase tracking-[0.2em] text-blue-500 font-bold">Molecular Mechanics</span>
+            <h1 id="step-name" class="text-xl font-black mt-1">載入中...</h1>
+            <p id="step-desc" class="text-xs text-gray-400 mt-2 leading-relaxed"></p>
+        </div>
+
+        <div class="energy-display shadow-xl">
+            <span class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Potential Energy Map</span>
+            <svg width="220" height="70" viewBox="0 0 180 70" class="mt-2 mx-auto">
+                <path d="M 10 60 Q 30 10 50 35 T 90 15 T 130 40 T 170 60" fill="none" stroke="#374151" stroke-width="2" />
+                <circle id="energy-ball" cx="10" cy="60" r="4.5" fill="#3b82f6" style="transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);" />
+            </svg>
+            <div class="flex justify-between text-[8px] text-gray-600 mt-1 uppercase tracking-tighter">
+                <span>Ground</span>
+                <span>Excited</span>
+                <span>Relaxed</span>
+            </div>
+        </div>
+
+        <div class="speed-panel shadow-2xl">
+            <div class="flex flex-col">
+                <span class="text-[8px] font-bold text-gray-500 uppercase mb-1">Speed Multiplier</span>
+                <div class="flex items-center gap-3">
+                    <input type="range" id="speed-slider" min="0.5" max="5" step="0.5" value="1" class="w-24">
+                    <span id="speed-val" class="text-xs text-blue-400 font-mono font-bold w-6">1.0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-panel shadow-2xl">
+            <div class="flex items-center gap-2">
+                <button id="prev-btn" class="bg-slate-800 hover:bg-slate-700 p-2.5 rounded-xl transition-all border border-white/5">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
+                </button>
+                <button id="next-btn" class="flex-1 bg-blue-600 hover:bg-blue-500 py-2.5 px-4 rounded-xl text-[10px] font-black tracking-[0.1em] shadow-lg transition-all uppercase">Next Phase</button>
+                <div class="flex items-center px-3 py-2 bg-black/40 rounded-xl border border-white/5">
+                    <input type="checkbox" id="auto-play" class="w-3.5 h-3.5 cursor-pointer">
+                    <label for="auto-play" class="ml-1.5 text-[10px] font-bold text-gray-400 cursor-pointer uppercase">Auto</label>
+                </div>
+            </div>
+            <div class="grid grid-cols-4 gap-1 pt-2 border-t border-white/5">
+                <div id="nav-0" class="text-[8px] text-center text-gray-600 transition-all font-bold">P1</div>
+                <div id="nav-1" class="text-[8px] text-center text-gray-600 transition-all font-bold">T1</div>
+                <div id="nav-2" class="text-[8px] text-center text-gray-600 transition-all font-bold">P2</div>
+                <div id="nav-3" class="text-[8px] text-center text-gray-600 transition-all font-bold">T2</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, motor, rotor, stator, carbonAxis;
+        let currentStep = 3; // 初始於循環末端 (Step 4)
+        let isAnimating = false;
+        let autoPlay = false;
+        let speedMultiplier = 1.0;
+        let cumulativeRotationX = 0; // 追蹤累積旋轉角度，確保運動量正確
+        const BASE_DURATION = 1400;
+        const BASE_DELAY = 1800;
+
+        const STEPS = [
+            {
+                name: "1. 光激發 (h \u03BD)",
+                desc: "吸收紫外光，轉子繞軸翻轉 180\u00B0。此時平面與定子處於高位能重疊狀態。",
+                energy: { x: 50, y: 35 },
+                rotateChange: Math.PI, // 旋轉量
+                tilt: 0.35
+            },
+            {
+                name: "2. 熱螺旋反轉 (\u0394)",
+                desc: "熱能克服位阻張力，基團彈開進入穩定態。鎖定旋轉方向，防止回轉。",
+                energy: { x: 90, y: 15 },
+                rotateChange: 0,
+                tilt: -0.2
+            },
+            {
+                name: "3. 二次光激發 (h \u03BD)",
+                desc: "再次光照引發異構化，轉子繼續翻轉 180\u00B0 回原側。進入高張力亞穩態。",
+                energy: { x: 130, y: 40 },
+                rotateChange: Math.PI,
+                tilt: -0.35
+            },
+            {
+                name: "4. 最終熱弛豫 (\u0394)",
+                desc: "最終熱螺旋反轉，恢復至最低能量基態構型，完成一圈 360\u00B0 循環。",
+                energy: { x: 170, y: 60 },
+                rotateChange: 0,
+                tilt: 0.2
+            }
+        ];
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const pLight = new THREE.PointLight(0x60a5fa, 1.8, 60);
+            pLight.position.set(5, 5, 10);
+            scene.add(pLight);
+
+            motor = new THREE.Group();
+
+            carbonAxis = new THREE.Group();
+            const bondGeom = new THREE.CylinderGeometry(0.04, 0.04, 1.6, 32);
+            const bondMat = new THREE.MeshPhongMaterial({ color: 0x64748b });
+            const b1 = new THREE.Mesh(bondGeom, bondMat); b1.position.z = 0.06;
+            const b2 = new THREE.Mesh(bondGeom, bondMat); b2.position.z = -0.06;
+            carbonAxis.add(b1, b2);
+            carbonAxis.rotation.z = Math.PI / 2;
+            motor.add(carbonAxis);
+
+            const atomGeom = new THREE.SphereGeometry(0.12, 32, 32);
+            const atomMat = new THREE.MeshPhongMaterial({ color: 0x94a3b8 });
+            const cLeft = new THREE.Mesh(atomGeom, atomMat); cLeft.position.set(-0.8, 0, 0);
+            const cRight = new THREE.Mesh(atomGeom, atomMat); cRight.position.set(0.8, 0, 0);
+            motor.add(cLeft, cRight);
+
+            function createPlanarGroup(color, emissive) {
+                const group = new THREE.Group();
+                const connGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.6, 16);
+                const connMat = new THREE.MeshPhongMaterial({ color: color });
+                const conn = new THREE.Mesh(connGeom, connMat);
+                conn.position.y = 0.3;
+                group.add(conn);
+
+                const shape = new THREE.Shape();
+                const radius = 0.9;
+                for (let i = 0; i <= 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2;
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+                }
+                const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: false });
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: color, emissive: emissive, emissiveIntensity: 0.4,
+                    transparent: true, opacity: 0.9, side: THREE.DoubleSide
+                });
+                const plane = new THREE.Mesh(geometry, material);
+                plane.position.y = 0.8; 
+                group.add(plane);
+                return group;
+            }
+
+            stator = createPlanarGroup(0x1d4ed8, 0x1e3a8a);
+            stator.position.set(-0.8, 0, 0);
+            stator.rotation.z = Math.PI; 
+            motor.add(stator);
+
+            rotor = createPlanarGroup(0xe11d48, 0x881337);
+            rotor.position.set(0.8, 0, 0);
+            // 初始狀態 tilt
+            rotor.rotation.z = STEPS[3].tilt;
+            motor.add(rotor);
+
+            scene.add(motor);
+            camera.position.set(0, 1.5, 7.5);
+            camera.lookAt(0, 0.5, 0);
+
+            updateUI();
+            animateLoop();
+        }
+
+        function animateLoop() {
+            requestAnimationFrame(animateLoop);
+            motor.rotation.y += 0.002 * speedMultiplier;
+            renderer.render(scene, camera);
+        }
+
+        function updateUI() {
+            const step = STEPS[currentStep];
+            document.getElementById('step-name').innerText = step.name;
+            document.getElementById('step-desc').innerText = step.desc;
+            
+            for(let i=0; i<4; i++) {
+                document.getElementById(`nav-${i}`).className = (i === currentStep) 
+                    ? "text-[8px] text-center active-step-label" 
+                    : "text-[8px] text-center text-gray-600 font-bold";
+            }
+
+            const ball = document.getElementById('energy-ball');
+            ball.setAttribute('cx', step.energy.x);
+            ball.setAttribute('cy', step.energy.y);
+        }
+
+        function triggerFlash() {
+            const flash = document.getElementById('flash-effect');
+            flash.style.opacity = '0.35';
+            setTimeout(() => { flash.style.opacity = '0'; }, 120 / speedMultiplier);
+        }
+
+        async function goToStep(stepIdx, direction = 1) {
+            if (isAnimating) return;
+            isAnimating = true;
+            
+            const targetStep = STEPS[stepIdx];
+            if (stepIdx === 0 || stepIdx === 2) {
+                if (direction === 1) triggerFlash(); // 只有正向光激發才閃光
+            }
+
+            const actualDuration = BASE_DURATION / speedMultiplier;
+            
+            // 旋轉計算：
+            // 若正向移動到 0 或 2，旋轉增加 PI。
+            // 若逆向移動到 3 或 1，旋轉減少 PI。
+            const startRot = rotor.rotation.x;
+            if (direction === 1) {
+                cumulativeRotationX += targetStep.rotateChange;
+            } else {
+                // 逆向時，旋轉量應取「當前步」的旋轉量（因為是倒轉回去）
+                const currentStepData = STEPS[currentStep];
+                cumulativeRotationX -= currentStepData.rotateChange;
+            }
+            const targetRot = cumulativeRotationX;
+
+            const startTilt = rotor.rotation.z;
+            const targetTilt = targetStep.tilt;
+            const startTime = performance.now();
+
+            function update(now) {
+                const p = (now - startTime) / actualDuration;
+                const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+
+                if (p < 1) {
+                    rotor.rotation.x = startRot + (targetRot - startRot) * ease;
+                    rotor.rotation.z = startTilt + (targetTilt - startTilt) * ease;
+                    requestAnimationFrame(update);
+                } else {
+                    rotor.rotation.x = targetRot;
+                    rotor.rotation.z = targetTilt;
+                    isAnimating = false;
+                    
+                    if (autoPlay) {
+                        setTimeout(() => { if(autoPlay) nextStep(); }, BASE_DELAY / speedMultiplier);
+                    }
+                }
+            }
+            requestAnimationFrame(update);
+            currentStep = stepIdx;
+            updateUI();
+        }
+
+        function nextStep() {
+            if (isAnimating) return;
+            const nextIdx = (currentStep + 1) % 4;
+            goToStep(nextIdx, 1);
+        }
+
+        function prevStep() {
+            if (isAnimating) return;
+            const prevIdx = (currentStep - 1 + 4) % 4;
+            goToStep(prevIdx, -1);
+        }
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            autoPlay = false;
+            document.getElementById('auto-play').checked = false;
+            nextStep();
+        });
+
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            autoPlay = false;
+            document.getElementById('auto-play').checked = false;
+            prevStep();
+        });
+
+        document.getElementById('auto-play').addEventListener('change', (e) => {
+            autoPlay = e.target.checked;
+            if (autoPlay && !isAnimating) nextStep();
+        });
+
+        document.getElementById('speed-slider').addEventListener('input', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+            document.getElementById('speed-val').innerText = speedMultiplier.toFixed(1);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = init;
+    </script>
+</body>
+</html>
