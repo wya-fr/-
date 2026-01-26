@@ -3,404 +3,421 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>分子馬達：響應式 3D 平面型動畫</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>探索分子機械的世界 - 2016 諾貝爾化學獎</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #030712; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; touch-action: manipulation; }
-        canvas { display: block; }
-        
-        .ui-overlay {
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(56, 189, 248, 0.5);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 動畫效果 */
+        @keyframes rotate-propeller {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-propeller {
+            animation: rotate-propeller 2s linear infinite;
+            transform-origin: center;
+        }
+        @keyframes shuttle-move {
+            0%, 100% { transform: translateX(-18px); }
+            50% { transform: translateX(18px); }
+        }
+        .animate-shuttle-ring {
+            animation: shuttle-move 2s ease-in-out infinite;
+        }
+
+        .timeline-line {
             position: absolute;
-            inset: 0;
-            pointer-events: none;
-            display: grid;
-            grid-template-areas: 
-                "top-left . top-right"
-                ". . ."
-                "bottom-left . bottom-right";
-            grid-template-columns: minmax(200px, 350px) 1fr minmax(180px, 280px);
-            grid-template-rows: auto 1fr auto;
-            padding: 16px;
-            color: white;
-            z-index: 10;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(to bottom, #38bdf8, #818cf8, transparent);
         }
 
-        @media (min-width: 768px) {
-            .ui-overlay { padding: 24px; }
+        .clickable-card:active {
+            transform: scale(0.96);
         }
 
-        .ui-overlay > * { pointer-events: auto; }
-
-        /* 左上角：步驟資訊 */
-        .step-info {
-            grid-area: top-left;
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            padding: 16px;
-            border-radius: 16px;
-            border-left: 4px solid #3b82f6;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            max-width: 100%;
+        /* 照片容器 */
+        .laureate-photo-container {
+            width: 140px;
+            height: 140px;
+            margin: 0 auto 1.5rem;
+            border-radius: 50%;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+            transition: all 0.3s ease;
         }
 
-        /* 右上角：能量圖表 */
-        .energy-display {
-            grid-area: top-right;
-            background: rgba(17, 24, 39, 0.5);
-            backdrop-filter: blur(8px);
-            padding: 12px;
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            text-align: center;
-            max-width: 100%;
+        .glass-card:hover .laureate-photo-container {
+            border-color: rgba(56, 189, 248, 0.5);
+            transform: scale(1.05);
         }
 
-        /* 左下角：速度控制 */
-        .speed-panel {
-            grid-area: bottom-left;
-            align-self: end;
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            padding: 12px 16px;
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+        /* 返回頂部 */
+        #backToTop {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 3.5rem;
+            height: 3.5rem;
             display: flex;
             align-items: center;
-            gap: 10px;
-            width: fit-content;
-        }
-
-        /* 右下角：導航控制 */
-        .nav-panel {
-            grid-area: bottom-right;
-            align-self: end;
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            padding: 12px 16px;
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-width: 100%;
-        }
-
-        .flash {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: white;
+            justify-content: center;
+            z-index: 50;
+            cursor: pointer;
             opacity: 0;
-            pointer-events: none;
-            z-index: 5;
+            visibility: hidden;
+            transition: all 0.3s ease;
         }
-
-        .active-step-label { color: #60a5fa; font-weight: 800; text-shadow: 0 0 8px rgba(96, 165, 250, 0.4); }
-        input[type=range] { accent-color: #3b82f6; cursor: pointer; }
-
-        /* 手機直向適配 */
-        @media (max-width: 640px) {
-            .ui-overlay {
-                grid-template-areas: 
-                    "top-left top-left"
-                    ". ."
-                    "bottom-left bottom-right";
-                grid-template-columns: 1fr 1fr;
-                padding: 12px;
-            }
-            .energy-display { display: none; } /* 手機端隱藏能量圖以節省空間 */
-            .step-info h1 { font-size: 1.1rem; }
-            .step-info p { font-size: 0.75rem; }
-            .nav-panel { padding: 10px; }
-            .speed-panel { padding: 10px; }
+        #backToTop.show {
+            opacity: 1;
+            visibility: visible;
         }
     </style>
 </head>
 <body>
 
-    <div id="flash-effect" class="flash"></div>
+    <canvas id="bg-canvas"></canvas>
 
-    <div class="ui-overlay">
-        <!-- 步驟卡片 -->
-        <div class="step-info">
-            <span class="text-[8px] sm:text-[9px] uppercase tracking-[0.2em] text-blue-500 font-bold">Molecular Mechanics</span>
-            <h1 id="step-name" class="text-lg sm:text-xl font-black mt-1">載入中...</h1>
-            <p id="step-desc" class="text-[10px] sm:text-xs text-gray-400 mt-2 leading-relaxed"></p>
+    <div id="backToTop" class="glass-card" onclick="scrollToTop()">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+        </svg>
+    </div>
+
+    <!-- Hero 區塊 -->
+    <section class="min-h-screen flex flex-col items-center justify-center text-center px-6 relative">
+        <div class="max-w-4xl">
+            <h1 class="text-6xl md:text-8xl font-bold mb-6 gradient-text">分子機械</h1>
+            <h2 class="text-2xl md:text-4xl font-medium text-slate-300 mb-8 tracking-[0.2em]">2016 諾貝爾化學獎得主及其成就</h2>
+            <p class="text-lg md:text-2xl text-slate-400 leading-relaxed mb-10">
+                「他們開發出了運動受控的分子，只要加入能量，就能執行特定任務。」
+            </p>
+            <div class="flex flex-wrap justify-center gap-4">
+                <a href="#history" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-full font-bold transition duration-300">探索里程碑</a>
+                <a href="#research-future" class="border border-blue-500/50 hover:bg-blue-500/10 text-white px-8 py-3 rounded-full font-bold transition duration-300">研究分析與展望</a>
+                <a href="#types" class="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-full font-bold transition duration-300">查看類型</a>
+            </div>
         </div>
+    </section>
 
-        <!-- 能量圖 (僅平板/桌面顯示) -->
-        <div class="energy-display shadow-xl">
-            <span class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Potential Map</span>
-            <svg width="100%" height="60" viewBox="0 0 180 70" class="mt-1 mx-auto max-w-[200px]">
-                <path d="M 10 60 Q 30 10 50 35 T 90 15 T 130 40 T 170 60" fill="none" stroke="#374151" stroke-width="2" />
-                <circle id="energy-ball" cx="10" cy="60" r="4.5" fill="#3b82f6" style="transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);" />
-            </svg>
-        </div>
-
-        <!-- 速度面板 -->
-        <div class="speed-panel shadow-2xl">
-            <div class="flex flex-col">
-                <span class="text-[8px] font-bold text-gray-500 uppercase">Speed</span>
-                <div class="flex items-center gap-2">
-                    <input type="range" id="speed-slider" min="0.5" max="5" step="0.5" value="1" class="w-16 sm:w-24">
-                    <span id="speed-val" class="text-xs text-blue-400 font-mono font-bold">1.0</span>
+    <div class="container mx-auto px-6 space-y-32 pb-32">
+        
+        <!-- 獲獎者背景區塊 -->
+        <section id="laureates">
+            <h3 class="text-3xl font-bold text-center mb-16 gradient-text underline decoration-blue-500/30 underline-offset-8">這群機械的建築師</h3>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="glass-card p-8 text-center border-t-4 border-t-blue-500">
+                    <div class="laureate-photo-container bg-slate-800">
+                        <img src="https://drive.google.com/thumbnail?id=12uBb_39lQcvdFx9nPhMstysIR6gyyoX1&sz=w500" alt="Jean-Pierre Sauvage" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150/1e293b/38bdf8?text=Sauvage'">
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Jean-Pierre Sauvage</h4>
+                    <p class="text-blue-400 text-sm mb-4">索瓦日</p>
+                    <p class="text-slate-400 text-sm">法國斯特拉斯堡大學<br>榮譽教授</p>
+                </div>
+                <div class="glass-card p-8 text-center border-t-4 border-t-indigo-500">
+                    <div class="laureate-photo-container bg-slate-800">
+                        <img src="https://drive.google.com/thumbnail?id=1D3zaOW-6e8wbEFT0QD8l_s2tHkdDRMEw&sz=w500" alt="Sir J. Fraser Stoddart" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150/1e293b/818cf8?text=Stoddart'">
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Sir J. Fraser Stoddart</h4>
+                    <p class="text-indigo-400 text-sm mb-4">斯托達特爵士</p>
+                    <p class="text-slate-400 text-sm">美國西北大學<br>化學教授</p>
+                </div>
+                <div class="glass-card p-8 text-center border-t-4 border-t-purple-500">
+                    <div class="laureate-photo-container bg-slate-800">
+                        <img src="https://drive.google.com/thumbnail?id=1zwYSrOc-bCtz5k91vTUgWQhnchZ3rLq_&sz=w500" alt="Bernard L. Feringa" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150/1e293b/c084fc?text=Feringa'">
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Bernard L. Feringa</h4>
+                    <p class="text-purple-400 text-sm mb-4">費林加</p>
+                    <p class="text-slate-400 text-sm">荷蘭格羅寧根大學<br>有機化學教授</p>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- 導航按鈕 -->
-        <div class="nav-panel shadow-2xl">
-            <div class="flex items-center gap-2">
-                <button id="prev-btn" class="bg-slate-800 hover:bg-slate-700 p-2 rounded-xl transition-all border border-white/5 active:scale-90">
-                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
-                </button>
-                <button id="next-btn" class="flex-1 bg-blue-600 hover:bg-blue-500 py-2 px-3 rounded-xl text-[9px] sm:text-[10px] font-black tracking-[0.1em] shadow-lg transition-all uppercase active:scale-95">Next</button>
-                <div class="flex items-center px-2 py-1.5 bg-black/40 rounded-xl border border-white/5">
-                    <input type="checkbox" id="auto-play" class="w-3.5 h-3.5 cursor-pointer">
-                    <label for="auto-play" class="ml-1.5 text-[9px] font-bold text-gray-400 cursor-pointer uppercase">Auto</label>
+        <!-- 概念區塊：機械鍵 -->
+        <section class="max-w-5xl mx-auto">
+            <div class="glass-card p-12 relative overflow-hidden">
+                <div class="grid md:grid-cols-2 gap-12 relative z-10">
+                    <div>
+                        <h3 class="text-3xl font-bold mb-6">革命性的連繫：機械鍵</h3>
+                        <p class="text-slate-300 leading-relaxed mb-6">
+                            傳統化學鍵原子間共享電子，結構相對固定。而<b>機械鍵 (Mechanical Bond)</b> 則是分子間的物理互鎖，為分子機械提供自由運動的基礎。
+                        </p>
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-4 bg-white/5 p-4 rounded-lg">
+                                <div class="text-green-400 font-bold">一般化學鍵</div>
+                                <div class="text-slate-500 text-sm">靜態、固定、強大力場</div>
+                            </div>
+                            <div class="flex items-center gap-4 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
+                                <div class="text-blue-400 font-bold">機械鍵</div>
+                                <div class="text-slate-300 text-sm">動態、物理互鎖、可相對運動</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-center">
+                        <svg width="200" height="200" viewBox="0 0 100 100" class="drop-shadow-2xl">
+                            <circle cx="40" cy="50" r="25" fill="none" stroke="#38bdf8" stroke-width="6" />
+                            <circle cx="60" cy="50" r="25" fill="none" stroke="#818cf8" stroke-width="6" />
+                            <path d="M 54 31 A 25 25 0 0 1 65 50" fill="none" stroke="#38bdf8" stroke-width="6" />
+                        </svg>
+                    </div>
                 </div>
             </div>
-            <div class="grid grid-cols-4 gap-1 pt-2 border-t border-white/5">
-                <div id="nav-0" class="text-[7px] sm:text-[8px] text-center text-gray-600 transition-all font-bold">P1</div>
-                <div id="nav-1" class="text-[7px] sm:text-[8px] text-center text-gray-600 transition-all font-bold">T1</div>
-                <div id="nav-2" class="text-[7px] sm:text-[8px] text-center text-gray-600 transition-all font-bold">P2</div>
-                <div id="nav-3" class="text-[7px] sm:text-[8px] text-center text-gray-600 transition-all font-bold">T2</div>
+        </section>
+
+        <!-- 發展里程碑 -->
+        <section id="history" class="relative">
+            <h3 class="text-3xl font-bold text-center mb-20 gradient-text">分子機械的誕生之路</h3>
+            <div class="timeline-line hidden md:block"></div>
+            
+            <div class="space-y-24">
+                <div class="relative flex flex-col md:flex-row items-center">
+                    <div class="flex-1 md:text-right md:pr-12 mb-8 md:mb-0">
+                        <span class="text-6xl font-black text-slate-800 absolute -top-10 right-10 md:right-1/2 opacity-50">1983</span>
+                        <h4 class="text-2xl font-bold text-blue-400 mb-2">索烴的合成 (Catenanes)</h4>
+                        <p class="text-slate-400 italic mb-2">Sauvage 團隊</p>
+                        <p class="text-slate-300">成功將兩個環狀分子物理互鎖。</p>
+                    </div>
+                    <div class="w-8 h-8 bg-blue-500 rounded-full border-4 border-slate-900 z-10 hidden md:block"></div>
+                    <div class="flex-1 md:pl-12 flex justify-center md:justify-start">
+                        <svg width="60" height="60" viewBox="0 0 32 32" class="text-blue-300">
+                            <circle cx="12" cy="16" r="8" fill="none" stroke="currentColor" stroke-width="2.5" />
+                            <circle cx="20" cy="16" r="8" fill="none" stroke="currentColor" stroke-width="2.5" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="relative flex flex-col md:flex-row-reverse items-center">
+                    <div class="flex-1 md:text-left md:pl-12 mb-8 md:mb-0">
+                        <span class="text-6xl font-black text-slate-800 absolute -top-10 left-10 md:left-1/2 opacity-50">1991</span>
+                        <h4 class="text-2xl font-bold text-indigo-400 mb-2">輪烴與控制移動 (Rotaxanes)</h4>
+                        <p class="text-slate-400 italic mb-2">Stoddart 團隊</p>
+                        <p class="text-slate-300">實現了環狀分子在軸上的受控滑動。</p>
+                    </div>
+                    <div class="w-8 h-8 bg-indigo-500 rounded-full border-4 border-slate-900 z-10 hidden md:block"></div>
+                    <div class="flex-1 md:pr-12 flex justify-center md:justify-end">
+                        <svg width="70" height="30" viewBox="0 0 40 20" class="text-indigo-300">
+                            <line x1="5" y1="10" x2="35" y2="10" stroke="currentColor" stroke-width="2.5" />
+                            <circle cx="5" cy="10" r="3" fill="currentColor" />
+                            <circle cx="35" cy="10" r="3" fill="currentColor" />
+                            <ellipse cx="20" cy="10" rx="5" ry="8" fill="none" stroke="currentColor" stroke-width="2.5" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="relative flex flex-col md:flex-row items-center">
+                    <div class="flex-1 md:text-right md:pr-12 mb-8 md:mb-0">
+                        <span class="text-6xl font-black text-slate-800 absolute -top-10 right-10 md:right-1/2 opacity-50">1999</span>
+                        <h4 class="text-2xl font-bold text-purple-400 mb-2">分子馬達 (Molecular Motors)</h4>
+                        <p class="text-slate-400 italic mb-2">Feringa 團隊</p>
+                        <p class="text-slate-300">開發出第一個能朝單一方向持續旋轉的馬達。</p>
+                    </div>
+                    <div class="w-8 h-8 bg-purple-500 rounded-full border-4 border-slate-900 z-10 hidden md:block"></div>
+                    <div class="flex-1 md:pl-12 flex justify-center md:justify-start">
+                        <svg class="animate-propeller w-12 h-12 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12,11A1,1 0 0,0 11,12A1,1 0 0,0 12,13A1,1 0 0,0 13,12A1,1 0 0,0 12,11M12.5,2L14.5,9H9.5L11.5,2H12.5M11.5,22L9.5,15H14.5L12.5,22H11.5M2,11.5L9,9.5V14.5L2,12.5V11.5M22,12.5L15,14.5V9.5L22,11.5V12.5Z" />
+                        </svg>
+                    </div>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <!-- 核心機械類型 -->
+        <section id="types" class="glass-card p-10 max-w-5xl mx-auto">
+            <h2 class="text-3xl font-bold mb-12 text-center gradient-text">核心機械類型</h2>
+            <div class="grid md:grid-cols-3 gap-8 text-center">
+                <a href="https://wya-fr.github.io/-/%E5%88%86%E5%AD%90%E9%A6%AC%E9%81%94" target="_blank" class="group clickable-card block p-6 rounded-2xl transition hover:bg-white/5 border border-transparent hover:border-white/10">
+                    <div class="flex justify-center mb-6 h-16 items-center">
+                        <svg class="animate-propeller w-16 h-16 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12,11A1,1 0 0,0 11,12A1,1 0 0,0 12,13A1,1 0 0,0 13,12A1,1 0 0,0 12,11M12.5,2L14.5,9H9.5L11.5,2H12.5M11.5,22L9.5,15H14.5L12.5,22H11.5M2,11.5L9,9.5V14.5L2,12.5V11.5M22,12.5L15,14.5V9.5L22,11.5V12.5Z" />
+                        </svg>
+                    </div>
+                    <h4 class="font-bold mb-1 text-blue-300 text-xl">分子馬達</h4>
+                    <p class="text-xs text-slate-500 mb-4">Molecular Motors</p>
+                    <p class="text-sm text-slate-400">將光或化學能轉換為定向轉動。</p>
+                </a>
+                <a href="https://wya-fr.github.io/molecular-switch/%E5%88%86%E5%AD%90%E9%96%8B%E9%97%9C" target="_blank" class="group clickable-card block p-6 rounded-2xl transition hover:bg-white/5 border border-transparent hover:border-white/10">
+                    <div class="text-6xl mb-6 h-16 flex items-center justify-center transform group-hover:scale-110 transition">🔘</div>
+                    <h4 class="font-bold mb-1 text-blue-300 text-xl">分子開關</h4>
+                    <p class="text-xs text-slate-500 mb-4">Molecular Switches</p>
+                    <p class="text-sm text-slate-400">在穩定狀態間進行受控切換。</p>
+                </a>
+                <a href="https://wya-fr.github.io/Molecular-Shuttle/%E5%88%86%E5%AD%90%E6%A2%AD" target="_blank" class="group clickable-card block p-6 rounded-2xl transition hover:bg-white/5 border border-transparent hover:border-white/10">
+                    <div class="flex justify-center mb-6 h-16 items-center">
+                        <svg width="60" height="30" viewBox="0 0 60 30" class="text-indigo-400">
+                            <line x1="10" y1="15" x2="50" y2="15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+                            <rect x="5" y="10" width="5" height="10" fill="currentColor" rx="1" />
+                            <rect x="50" y="10" width="5" height="10" fill="currentColor" rx="1" />
+                            <g class="animate-shuttle-ring">
+                                <ellipse cx="30" cy="15" rx="6" ry="10" fill="none" stroke="currentColor" stroke-width="3" />
+                            </g>
+                        </svg>
+                    </div>
+                    <h4 class="font-bold mb-1 text-blue-300 text-xl">分子梭</h4>
+                    <p class="text-xs text-slate-500 mb-4">Molecular Shuttles</p>
+                    <p class="text-sm text-slate-400">環狀分子在軸上來回滑動。</p>
+                </a>
+            </div>
+        </section>
+
+        <!-- 合併區塊：深度研究歸類與未來展望 -->
+        <section id="research-future" class="max-w-6xl mx-auto">
+            <div class="glass-card p-12 relative overflow-hidden">
+                <!-- 裝飾光暈 -->
+                <div class="absolute -top-24 -left-24 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-24 -right-24 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
+
+                <div class="relative z-10">
+                    <div class="text-center mb-16">
+                        <h3 class="text-4xl font-bold mb-6 gradient-text underline decoration-purple-500/30 underline-offset-8">深度研究歸類與未來展望</h3>
+                        <p class="text-slate-300 max-w-3xl mx-auto leading-relaxed text-lg">
+                            我們對分子機械的系統演進進行了深入歸類。從最初傳統合成的低產率碰撞，到如今透過 AI 設計與 SMART-EM 可視化技術，我們正邁向精確編程物質的新時代。
+                        </p>
+                    </div>
+
+                    <div class="grid lg:grid-cols-2 gap-12">
+                        <!-- 左側：研究連結與系統觀點 -->
+                        <div class="space-y-8">
+                            <div class="bg-white/5 p-8 rounded-2xl border border-white/10">
+                                <h4 class="text-xl font-bold text-blue-300 mb-4 flex items-center gap-2">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M14,10H10V14H14V10M14,4H10V8H14V4M19,10H15V14H19V10M19,4H15V8H19V4M21,19V5C21,3.9 20.1,3 19,3H5C3.9,3 3,3.9 3,5V19C3,20.1 3.9,21 5,21H19C20.1,21 21,20.1 21,19M7,10H4V14H7V10M7,4H4V8H7V4M14,15H10V18H14V15M19,15H15V18H19V15M7,15H4V18H7V15Z"/></svg>
+                                    研究架構與數據分析
+                                </h4>
+                                <p class="text-slate-400 text-sm mb-8 leading-relaxed">
+                                    此份研究整合了製造革命流程（傳統 → 模板導向 → 自動化未來）的數據。詳細歸類表格與系統觀察報告，請點擊下方按鈕存取 Google Sheets 試算表。
+                                </p>
+                                <a href="https://docs.google.com/spreadsheets/d/1wlYZnxFhSYdHJPq4nd6pTrXzgZwpkJ73x3-uff66Vvc/edit?gid=1914280356#gid=1914280356" 
+                                   target="_blank" 
+                                   class="inline-flex items-center gap-4 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30 px-8 py-4 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 group w-full justify-center md:w-auto">
+                                    <span>開啟深度研究試算表</span>
+                                    <svg class="w-5 h-5 opacity-50 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                    </svg>
+                                </a>
+                            </div>
+
+                            <div class="p-6 italic text-slate-500 border-l-2 border-slate-700 bg-slate-800/20 rounded-r-xl">
+                                「未來的工業革命將是『看不見』的。我們不再只是操縱材料，而是從底層重新編程物質。」
+                            </div>
+                        </div>
+
+                        <!-- 右側：合併後的應用展示 -->
+                        <div class="grid gap-6">
+                            <div class="flex gap-5 p-6 bg-blue-500/5 rounded-2xl border border-blue-500/10 hover:border-blue-500/30 transition-colors group">
+                                <div class="text-4xl transform group-hover:scale-110 transition">💊</div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-blue-200 mb-1">標靶醫療：機械手術</h4>
+                                    <p class="text-slate-400 text-sm">利用分子馬達與螺旋鑽孔機制，直接在癌細胞膜進行物理破壞，無抗藥性隱憂。</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-5 p-6 bg-purple-500/5 rounded-2xl border border-purple-500/10 hover:border-purple-500/30 transition-colors group">
+                                <div class="text-4xl transform group-hover:scale-110 transition">💾</div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-purple-200 mb-1">超越矽晶片：分子運算</h4>
+                                    <p class="text-slate-400 text-sm">利用輪烴開關的 bistable 特性，打造 TB 級分子記憶體與機械量子位元。</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-5 p-6 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 hover:border-indigo-500/30 transition-colors group">
+                                <div class="text-4xl transform group-hover:scale-110 transition">🤖</div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-indigo-200 mb-1">群體智慧：人工肌肉</h4>
+                                    <p class="text-slate-400 text-sm">數百萬個分子馬達協調動作，讓材料能像生物肌肉一樣產生宏觀的收縮與彎曲。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="text-center text-slate-500 text-sm pt-10 border-t border-white/5">
+            <p>© 2026 分子機械探索導覽 | 基於深度研究之未來展望</p>
+        </footer>
     </div>
 
     <script>
-        let scene, camera, renderer, motor, rotor, stator, carbonAxis;
-        let currentStep = 3; 
-        let isAnimating = false;
-        let autoPlay = false;
-        let speedMultiplier = 1.0;
-        let cumulativeRotationX = 0; 
-        const BASE_DURATION = 1400;
-        const BASE_DELAY = 1800;
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, molecules = [];
 
-        const STEPS = [
-            {
-                name: "1. 光激發 (h \u03BD)",
-                desc: "吸收光能，轉子繞軸翻轉 180\u00B0。結構進入高張力重疊狀態。",
-                energy: { x: 50, y: 35 },
-                rotateChange: Math.PI,
-                tilt: 0.35
-            },
-            {
-                name: "2. 熱螺旋反轉 (\u0394)",
-                desc: "熱能克服位阻。基團彈開釋放張力，鎖定旋轉方向。",
-                energy: { x: 90, y: 15 },
-                rotateChange: 0,
-                tilt: -0.2
-            },
-            {
-                name: "3. 二次光激發 (h \u03BD)",
-                desc: "再次光照引發翻轉，回到原側。進入高張力亞穩態。",
-                energy: { x: 130, y: 40 },
-                rotateChange: Math.PI,
-                tilt: -0.35
-            },
-            {
-                name: "4. 最終熱弛豫 (\u0394)",
-                desc: "恢復最低能量基態構型，完成一圈 360\u00B0 循環。",
-                energy: { x: 170, y: 60 },
-                rotateChange: 0,
-                tilt: 0.2
-            }
-        ];
-
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            document.body.appendChild(renderer.domElement);
-
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-            const pLight = new THREE.PointLight(0x60a5fa, 1.8, 60);
-            pLight.position.set(5, 5, 10);
-            scene.add(pLight);
-
-            motor = new THREE.Group();
-
-            carbonAxis = new THREE.Group();
-            const bondGeom = new THREE.CylinderGeometry(0.04, 0.04, 1.6, 32);
-            const bondMat = new THREE.MeshPhongMaterial({ color: 0x64748b });
-            const b1 = new THREE.Mesh(bondGeom, bondMat); b1.position.z = 0.06;
-            const b2 = new THREE.Mesh(bondGeom, bondMat); b2.position.z = -0.06;
-            carbonAxis.add(b1, b2);
-            carbonAxis.rotation.z = Math.PI / 2;
-            motor.add(carbonAxis);
-
-            const atomGeom = new THREE.SphereGeometry(0.12, 32, 32);
-            const atomMat = new THREE.MeshPhongMaterial({ color: 0x94a3b8 });
-            const cLeft = new THREE.Mesh(atomGeom, atomMat); cLeft.position.set(-0.8, 0, 0);
-            const cRight = new THREE.Mesh(atomGeom, atomMat); cRight.position.set(0.8, 0, 0);
-            motor.add(cLeft, cRight);
-
-            function createPlanarGroup(color, emissive) {
-                const group = new THREE.Group();
-                const connGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.6, 16);
-                const connMat = new THREE.MeshPhongMaterial({ color: color });
-                const conn = new THREE.Mesh(connGeom, connMat);
-                conn.position.y = 0.3;
-                group.add(conn);
-
-                const shape = new THREE.Shape();
-                const radius = 0.9;
-                for (let i = 0; i <= 6; i++) {
-                    const angle = (i / 6) * Math.PI * 2;
-                    const x = Math.cos(angle) * radius;
-                    const y = Math.sin(angle) * radius;
-                    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
-                }
-                const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: false });
-                const material = new THREE.MeshPhongMaterial({ 
-                    color: color, emissive: emissive, emissiveIntensity: 0.4,
-                    transparent: true, opacity: 0.9, side: THREE.DoubleSide
-                });
-                const plane = new THREE.Mesh(geometry, material);
-                plane.position.y = 0.8; 
-                group.add(plane);
-                return group;
-            }
-
-            stator = createPlanarGroup(0x1d4ed8, 0x1e3a8a);
-            stator.position.set(-0.8, 0, 0);
-            stator.rotation.z = Math.PI; 
-            motor.add(stator);
-
-            rotor = createPlanarGroup(0xe11d48, 0x881337);
-            rotor.position.set(0.8, 0, 0);
-            rotor.rotation.z = STEPS[3].tilt;
-            motor.add(rotor);
-
-            scene.add(motor);
-            updateCameraPosition();
-            animateLoop();
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            molecules = Array.from({length: 50}, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                r: Math.random() * 3 + 2,
+                color: ['#38bdf8', '#818cf8', '#c084fc'][Math.floor(Math.random()*3)]
+            }));
         }
 
-        function updateCameraPosition() {
-            const aspect = window.innerWidth / window.innerHeight;
-            camera.aspect = aspect;
-            // 根據手機比例調整相機距離
-            camera.position.set(0, 1.5, aspect < 1 ? 9 : 7.5);
-            camera.lookAt(0, 0.5, 0);
-            camera.updateProjectionMatrix();
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            molecules.forEach(m => {
+                m.vx += (Math.random() - 0.5) * 0.12;
+                m.vy += (Math.random() - 0.5) * 0.12;
+                m.vx *= 0.99; m.vy *= 0.99;
+                m.x += m.vx; m.y += m.vy;
+                if (m.x < 0) m.x = width; if (m.x > width) m.x = 0;
+                if (m.y < 0) m.y = height; if (m.y > height) m.y = 0;
+                ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+                ctx.fillStyle = m.color + '44'; ctx.fill();
+            });
+            requestAnimationFrame(animate);
         }
 
-        function animateLoop() {
-            requestAnimationFrame(animateLoop);
-            motor.rotation.y += 0.002 * speedMultiplier;
-            renderer.render(scene, camera);
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function updateUI() {
-            const step = STEPS[currentStep];
-            document.getElementById('step-name').innerText = step.name;
-            document.getElementById('step-desc').innerText = step.desc;
-            
-            for(let i=0; i<4; i++) {
-                document.getElementById(`nav-${i}`).className = (i === currentStep) 
-                    ? "text-[7px] sm:text-[8px] text-center active-step-label" 
-                    : "text-[7px] sm:text-[8px] text-center text-gray-600 font-bold";
-            }
+        window.onscroll = function() {
+            const btn = document.getElementById('backToTop');
+            if (document.documentElement.scrollTop > 300) btn.classList.add('show');
+            else btn.classList.remove('show');
+        };
 
-            const ball = document.getElementById('energy-ball');
-            if (ball) {
-                ball.setAttribute('cx', step.energy.x);
-                ball.setAttribute('cy', step.energy.y);
-            }
-        }
-
-        function triggerFlash() {
-            const flash = document.getElementById('flash-effect');
-            flash.style.opacity = '0.35';
-            setTimeout(() => { flash.style.opacity = '0'; }, 120 / speedMultiplier);
-        }
-
-        async function goToStep(stepIdx, direction = 1) {
-            if (isAnimating) return;
-            isAnimating = true;
-            
-            const targetStep = STEPS[stepIdx];
-            if (direction === 1 && (stepIdx === 0 || stepIdx === 2)) triggerFlash();
-
-            const actualDuration = BASE_DURATION / speedMultiplier;
-            const startRot = rotor.rotation.x;
-            if (direction === 1) {
-                cumulativeRotationX += targetStep.rotateChange;
-            } else {
-                const currentStepData = STEPS[currentStep];
-                cumulativeRotationX -= currentStepData.rotateChange;
-            }
-            const targetRot = cumulativeRotationX;
-
-            const startTilt = rotor.rotation.z;
-            const targetTilt = targetStep.tilt;
-            const startTime = performance.now();
-
-            function update(now) {
-                const p = (now - startTime) / actualDuration;
-                const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-
-                if (p < 1) {
-                    rotor.rotation.x = startRot + (targetRot - startRot) * ease;
-                    rotor.rotation.z = startTilt + (targetTilt - startTilt) * ease;
-                    requestAnimationFrame(update);
-                } else {
-                    rotor.rotation.x = targetRot;
-                    rotor.rotation.z = targetTilt;
-                    isAnimating = false;
-                    if (autoPlay) {
-                        setTimeout(() => { if(autoPlay) nextStep(); }, BASE_DELAY / speedMultiplier);
-                    }
-                }
-            }
-            requestAnimationFrame(update);
-            currentStep = stepIdx;
-            updateUI();
-        }
-
-        function nextStep() {
-            if (isAnimating) return;
-            goToStep((currentStep + 1) % 4, 1);
-        }
-
-        function prevStep() {
-            if (isAnimating) return;
-            goToStep((currentStep - 1 + 4) % 4, -1);
-        }
-
-        document.getElementById('next-btn').addEventListener('click', () => {
-            autoPlay = false; document.getElementById('auto-play').checked = false;
-            nextStep();
-        });
-
-        document.getElementById('prev-btn').addEventListener('click', () => {
-            autoPlay = false; document.getElementById('auto-play').checked = false;
-            prevStep();
-        });
-
-        document.getElementById('auto-play').addEventListener('change', (e) => {
-            autoPlay = e.target.checked;
-            if (autoPlay && !isAnimating) nextStep();
-        });
-
-        document.getElementById('speed-slider').addEventListener('input', (e) => {
-            speedMultiplier = parseFloat(e.target.value);
-            document.getElementById('speed-val').innerText = speedMultiplier.toFixed(1);
-        });
-
-        window.addEventListener('resize', () => {
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            updateCameraPosition();
-        });
-
-        window.onload = init;
+        window.addEventListener('resize', resize);
+        resize(); animate();
     </script>
 </body>
 </html>
